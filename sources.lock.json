@@ -1,0 +1,24 @@
+{
+  "project_repository": "https://github.com/Sebastian6848/DeepSeek-Harness-in-Win7.git",
+  "reference_date": "2026-11-25",
+  "packaging": {
+    "repository": "https://github.com/factfinding/dsh-win7.git",
+    "commit": "5f77cac5a41d15de88af00a2de02be049abf5505",
+    "imported_paths": ["scripts", "shim", "win7-fixes", "LICENSE"]
+  },
+  "harness": {
+    "repository": "https://github.com/factfinding/deepseek-harness.git",
+    "branch": "dsh-v0.2.2-rc.5-win7",
+    "commit": "4ceb42e98f22b9c11778e12f4349faec2d3b6604",
+    "git_tree_before_project_changes": "f7c784931e545510a3ee1673a422df210bdef145",
+    "snapshot_path": "deepseek-harness",
+    "upstream_tag": "dsh-v0.2.2-rc.5",
+    "upstream_commit": "9c2670d3bce5275e0d1610272958121af87787bb",
+    "release_status": "release candidate, not an official stable release"
+  },
+  "assessed_alternative": {
+    "repository": "https://github.com/czh869452912/deepseek-harness-win7.git",
+    "commit": "1be3b7891ce67c1d42b2bee41412a27e11722389",
+    "usage": "reference only; its Python port was not imported"
+  }
+}

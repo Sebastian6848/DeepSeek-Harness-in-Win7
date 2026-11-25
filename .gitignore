@@ -1,0 +1,14 @@
+/upstream/
+/.archive/
+/.references/
+/out/
+/tools/
+/node/
+/e/
+/depot_tools/
+**/node_modules/
+**/__pycache__/
+**/.env
+**/.env.windows
+**/.env.local
+.DS_Store
