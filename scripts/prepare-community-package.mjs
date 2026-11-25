@@ -11,9 +11,27 @@ const root = fileURLToPath(new URL('../', import.meta.url))
 export const APP_ID = 'local.sebastian.deepseek-harness-win7-intranet'
 export const DEFAULT_VERSION = '0.2.2-rc.5.3'
 const hash = path => createHash('sha256').update(readFileSync(path)).digest('hex')
+export const canonicalArchivePath = path => path.replaceAll('\\', '/').replace(/^\/+/, '')
+const nativeArchivePath = path => join(...canonicalArchivePath(path).split('/'))
 
-export function verifySeed(path, seed) {
-  if (statSync(path).size !== seed.bytes || hash(path) !== seed.sha256) throw new Error('Pinned community installer checksum mismatch')
+export function readArchiveEntries(asar, archive) {
+  return new Map(asar.listPackage(archive).map(path => [canonicalArchivePath(path), asar.statFile(archive, nativeArchivePath(path))]))
+}
+
+export async function rebuildArchive(asar, archive, source, originalEntries) {
+  asar.uncache(archive)
+  rmSync(archive); rmSync(`${archive}.unpacked`, { recursive: true, force: true })
+  const streams = readdirSync(source, { recursive: true, withFileTypes: true }).map(entry => {
+    const path = join(entry.parentPath, entry.name), name = canonicalArchivePath(relative(source, path))
+    if (!entry.isDirectory() && !entry.isFile()) throw new Error(`Unexpected source link: ${name}`)
+    return { path: nativeArchivePath(name), type: entry.isDirectory() ? 'directory' : 'file', stat: statSync(path),
+      unpacked: originalEntries.get(name)?.unpacked === true, streamGenerator: () => createReadStream(path) }
+  })
+  await asar.createPackageFromStreams(archive, streams)
+}
+
+export function verifySeed(path, seed, label = 'Pinned community installer') {
+  if (statSync(path).size !== seed.bytes || hash(path) !== seed.sha256) throw new Error(`${label} checksum mismatch`)
 }
 
 function files(root) {
@@ -34,6 +52,21 @@ export function assertNativeUnchanged(expected, directory) {
   if (JSON.stringify(expected) !== JSON.stringify(nativeInventory(directory))) throw new Error('A reused Win7 native binary changed')
 }
 
+/** Verify the final archive, rather than relying only on the input directory inventory. */
+export function verifyArchiveRuntime(asar, archive, descriptor) {
+  const expected = new Set(descriptor.files.map(entry => `dsh/${entry.path}`))
+  for (const path of asar.listPackage(archive).map(canonicalArchivePath).filter(name => name.startsWith('dsh/'))) {
+    const entry = asar.statFile(archive, nativeArchivePath(path))
+    if (!entry.files && path !== 'dsh/desktop-runtime.json' && !expected.has(path)) throw new Error(`Unexpected archived runtime file: ${path}`)
+  }
+  for (const entry of descriptor.files) {
+    const body = asar.extractFile(archive, nativeArchivePath(`dsh/${entry.path}`))
+    if (body.length !== entry.bytes || createHash('sha256').update(body).digest('hex') !== entry.sha256) {
+      throw new Error(`Archived runtime checksum mismatch: ${entry.path}`)
+    }
+  }
+}
+
 function extract(tool, archive, output) {
   const result = spawnSync(tool, ['x', '-y', `-o${output}`, archive], { stdio: 'inherit' })
   if (result.error) throw result.error
@@ -43,11 +76,13 @@ function extract(tool, archive, output) {
 async function main() {
   const { values } = parseArgs({ options: {
     installer: { type: 'string' }, sevenzip: { type: 'string' }, output: { type: 'string' },
+    'chromium-notices': { type: 'string' },
     version: { type: 'string', default: DEFAULT_VERSION },
   } })
-  if (!values.installer || !values.sevenzip || !values.output) throw new Error('Required: --installer <pinned exe> --sevenzip <7z executable> --output <empty directory>')
+  if (!values.installer || !values.sevenzip || !values.output || !values['chromium-notices']) throw new Error('Required: --installer <pinned exe> --sevenzip <7z executable> --chromium-notices <verified LICENSES.chromium.html> --output <empty directory>')
   const lock = JSON.parse(readFileSync(join(root, 'sources.lock.json')))
   verifySeed(resolve(values.installer), lock.binary_seed)
+  verifySeed(resolve(values['chromium-notices']), lock.chromium_notices, 'Chromium notices')
   const output = resolve(values.output)
   if (existsSync(output) && readdirSync(output).length) throw new Error('Output directory must be empty')
   if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u.test(values.version)) throw new Error('Invalid build version')
@@ -59,7 +94,7 @@ async function main() {
   extract(values.sevenzip, resolve(values.installer), join(work, 'nsis'))
   extract(values.sevenzip, join(work, 'nsis/$PLUGINSDIR/app-64.7z'), app)
   const resources = join(app, 'resources'), archive = join(resources, 'app.asar')
-  const originalEntries = new Map(asar.listPackage(archive).map(path => [path.slice(1), asar.statFile(archive, path.slice(1))]))
+  const originalEntries = readArchiveEntries(asar, archive)
   asar.extractAll(archive, source)
   const dsh = join(source, 'dsh')
   const descriptor = await verifyDesktopRuntime(dsh, '0.2.2-rc.5', { platform: 'win32', arch: 'x64' })
@@ -102,27 +137,21 @@ async function main() {
   manifest.dshBuildCommit = commit; manifest.dshBuildDirty = dirty
   writeFileSync(join(source, 'package.json'), JSON.stringify(manifest, null, 2) + '\n')
   assertNativeUnchanged(natives, dsh)
-  await writeDesktopRuntimeAsync(dsh, descriptor.release, descriptor.sharedPackages.map(x => x.name), { platform: 'win32', arch: 'x64' })
+  const sealed = await writeDesktopRuntimeAsync(dsh, descriptor.release, descriptor.sharedPackages.map(x => x.name), { platform: 'win32', arch: 'x64' })
   await verifyDesktopRuntime(dsh, descriptor.release.version, { platform: 'win32', arch: 'x64' })
-  asar.uncache(archive)
-  rmSync(archive); rmSync(`${archive}.unpacked`, { recursive: true })
-  const streams = readdirSync(source, { recursive: true, withFileTypes: true }).map(entry => {
-    const path = join(entry.parentPath, entry.name), name = relative(source, path).replaceAll('\\', '/')
-    if (!entry.isDirectory() && !entry.isFile()) throw new Error(`Unexpected source link: ${name}`)
-    return { path: name, type: entry.isDirectory() ? 'directory' : 'file', stat: statSync(path),
-      unpacked: originalEntries.get(name)?.unpacked === true, streamGenerator: () => createReadStream(path) }
-  })
-  await asar.createPackageFromStreams(archive, streams)
+  await rebuildArchive(asar, archive, source, originalEntries)
+  verifyArchiveRuntime(asar, archive, sealed)
   for (const [name, entry] of originalEntries) {
-    if (entry.unpacked && !entry.files && asar.statFile(archive, name).unpacked !== true) throw new Error(`Lost native unpack placement: ${name}`)
+    if (entry.unpacked && !entry.files && asar.statFile(archive, nativeArchivePath(name)).unpacked !== true) throw new Error(`Lost native unpack placement: ${name}`)
   }
   for (const entry of replaced) {
-    if (createHash('sha256').update(asar.extractFile(archive, entry.path)).digest('hex') !== entry.sha256) throw new Error(`Overlay lost: ${entry.path}`)
+    if (createHash('sha256').update(asar.extractFile(archive, nativeArchivePath(entry.path))).digest('hex') !== entry.sha256) throw new Error(`Overlay lost: ${entry.path}`)
   }
   assertNativeUnchanged(outerNatives, app)
   rmSync(join(resources, 'app-update.yml'), { force: true })
+  cpSync(resolve(values['chromium-notices']), join(app, 'LICENSES.chromium.html'))
   const provenance = { schemaVersion: 1, version: values.version, sourceRepository: lock.project_repository,
-    sourceCommit: commit, sourceDirty: dirty, binarySeed: lock.binary_seed, replaced, runtimeFiles: descriptor.files.length,
+    sourceCommit: commit, sourceDirty: dirty, binarySeed: lock.binary_seed, chromiumNotices: lock.chromium_notices, replaced, runtimeFiles: sealed.files.length,
     reusedNativeFiles: natives.length, externalNetworkDefault: false, win7MachineValidated: false }
   writeFileSync(join(app, 'INTRANET-BUILD.json'), JSON.stringify(provenance, null, 2) + '\n')
   cpSync(join(root, 'LICENSE'), join(app, 'LICENSE-INTRANET.txt'))

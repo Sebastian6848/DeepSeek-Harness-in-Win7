@@ -4,7 +4,6 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 
 const require = createRequire(import.meta.url)
-const templates = join(dirname(require.resolve('app-builder-lib/package.json')), 'templates/nsis')
 const patched = Symbol.for('@deepseek-ai/dsh-desktop/directory-installer')
 
 function replaceOnce(source, before, after) {
@@ -52,12 +51,16 @@ export function directoryInstallerExits(source) {
   return source.replaceAll(/^(\s*)Quit\s*$/gm, '$1!ifndef BUILD_UNINSTALLER\n$1Call dshCleanupDirectories\n$1!endif\n$1Quit')
 }
 
-/** Install the build-only NSIS adapter without replacing electron-builder's signed bootstrap path. */
-export function installWindowsDirectoryInstaller() {
+/**
+ * Install the adapter on the same dependency instance that will perform packaging.
+ * @param {NodeRequire} [builderRequire] Resolver of the selected electron-builder installation.
+ */
+export function installWindowsDirectoryInstaller(builderRequire = require) {
+  const templates = join(dirname(builderRequire.resolve('app-builder-lib/package.json')), 'templates/nsis')
   // The package entry initializes the platform classes before their mutually dependent leaves.
-  require('app-builder-lib')
-  const { NsisTarget } = require('app-builder-lib/out/targets/nsis/NsisTarget.js')
-  const { getPath7za } = require('app-builder-lib/out/toolsets/7zip.js')
+  builderRequire('app-builder-lib')
+  const { NsisTarget } = builderRequire('app-builder-lib/out/targets/nsis/NsisTarget.js')
+  const { getPath7za } = builderRequire('app-builder-lib/out/toolsets/7zip.js')
   const prototype = NsisTarget.prototype
   if (prototype[patched]) return
   prototype[patched] = true

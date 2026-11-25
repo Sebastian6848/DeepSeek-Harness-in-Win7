@@ -22,4 +22,4 @@ export function directoryInstallerExits(source: string): string
 export function directoryUninstaller(source: string): string
 
 /** Install the build-only adapter while retaining signed uninstaller generation. */
-export function installWindowsDirectoryInstaller(): void
+export function installWindowsDirectoryInstaller(builderRequire?: NodeRequire): void

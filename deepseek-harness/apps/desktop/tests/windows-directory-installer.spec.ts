@@ -3,11 +3,35 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { expect, it } from 'vitest'
-import { directoryInstallerExits, directoryInstallSection, directoryUninstaller } from '../scripts/windows-directory-installer.mjs'
+import { directoryInstallerExits, directoryInstallSection, directoryUninstaller, installWindowsDirectoryInstaller } from '../scripts/windows-directory-installer.mjs'
 
 const require = createRequire(import.meta.url)
 const section = readFileSync(join(dirname(require.resolve('app-builder-lib/package.json')),
   'templates/nsis/installSection.nsh'), 'utf8')
+
+it('patches the explicitly selected builder instance when two dependency installations exist', () => {
+  require('app-builder-lib')
+  const actual = require('app-builder-lib/out/targets/nsis/NsisTarget.js').NsisTarget.prototype
+  const previous = Object.getOwnPropertyDescriptors(actual)
+  class SelectedTarget { async computeFinalScript(source: string): Promise<string> { return source } }
+  const original = SelectedTarget.prototype.computeFinalScript
+  const selected = Object.assign((id: string) => {
+    if (id === 'app-builder-lib') return {}
+    if (id.endsWith('/NsisTarget.js')) return { NsisTarget: SelectedTarget }
+    if (id.endsWith('/7zip.js')) return { getPath7za: async () => 'unused' }
+    throw new Error(`Unexpected module ${id}`)
+  }, { resolve: require.resolve }) as NodeRequire
+  try {
+    installWindowsDirectoryInstaller(selected)
+    expect(SelectedTarget.prototype.computeFinalScript).not.toBe(original)
+    const patched = SelectedTarget.prototype.computeFinalScript
+    installWindowsDirectoryInstaller(selected)
+    expect(SelectedTarget.prototype.computeFinalScript).toBe(patched)
+  } finally {
+    for (const key of Reflect.ownKeys(actual)) if (!Reflect.ownKeys(previous).includes(key)) Reflect.deleteProperty(actual, key)
+    Object.defineProperties(actual, previous)
+  }
+})
 
 it('keeps data cleanup out of the upstream template while retaining application removal and registration cleanup', () => {
   const source = readFileSync(join(dirname(require.resolve('app-builder-lib/package.json')), 'templates/nsis/uninstaller.nsh'), 'utf8')

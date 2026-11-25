@@ -13,12 +13,14 @@ Windows 构建机需要 Visual Studio C++ 工具链、PowerShell 7、7-Zip 和�
 `sources.lock.json` 的 `binary_seed` 固定社区安装包、大小及 SHA256。该包只在构建机下载和提取，不在目标机执行联网安装步骤。先在 `deepseek-harness/` 完成依赖安装和 `pnpm run build`，再在仓库根目录运行：
 
 ```powershell
-node scripts/prepare-community-package.mjs --installer out/community/upstream-win7.exe --sevenzip <7z.exe的路径> --output out/prepared --version 0.2.2-rc.5.3
+node scripts/prepare-community-package.mjs --installer out/community/upstream-win7.exe --sevenzip <7z.exe的路径> --chromium-notices out/notices/LICENSES.chromium.html --output out/prepared --version 0.2.2-rc.5.3
 npm install --prefix out/package-tools --ignore-scripts --no-audit --no-fund --save-exact electron-builder@26.17.0 @electron/asar@3.4.1
 node scripts/package-prepared-win7.mjs --prepared out/prepared/application --output out/installers --tools out/package-tools
 ```
 
-准备脚本仅接受哈希完全匹配的来源和空输出目录；提取原包，验证原有运行时清单，覆盖本仓库编译的 boot、LLM、自定义模型界面和桌面 bundle，重建清单，再生成 ASAR。它保留原包的所有原生二进制和 unpack 位置，逐项校验覆盖文件，并删除 `app-update.yml`。包内 `INTRANET-BUILD.json` 记录来源、源码提交及是否有未提交修改。正式发布预览包前，先提交源码，再从干净工作区执行准备步骤。
+`out/notices/LICENSES.chromium.html` 从 [官方 Electron v44.2.0 Windows x64 压缩包](https://github.com/electron/electron/releases/download/v44.2.0/electron-v44.2.0-win32-x64.zip) 提取；先按同一 Release 的 `SHASUMS256.txt` 校验压缩包，再按 `sources.lock.json` 校验声明文件。只复用声明文本，不使用官方不兼容的可执行文件。社区包的 Chromium credits 是样例页，本项目以同版本官方声明替换并记录来源。未来从源码重建 Electron 时，`generate_about_credits=true` 会生成该次构建的实际声明。
+
+准备脚本仅接受哈希完全匹配的安装包、声明文件和空输出目录；提取原包，验证原有运行时清单，覆盖本仓库编译的 boot、LLM、自定义模型界面和桌面 bundle，重建清单，再生成 ASAR。它保留原包的所有原生二进制和 unpack 位置，逐项校验覆盖文件，并删除 `app-update.yml`。包内 `INTRANET-BUILD.json` 记录来源、源码提交及是否有未提交修改。正式发布预览包前，先提交源码，再从干净工作区执行准备步骤。
 
 Windows 打包步骤复用社区 NSIS 模板、目录提升/卸载逻辑及原生安装界面，使用 Visual Studio 编译安装辅助 DLL。安装包不带自动更新源，也不依赖目标机下载组件。此流程不会重新编译 Electron/Node；其平台支持仍来自固定的社区补丁。编译依赖和安装包都放在被 Git 忽略的 `out/` 下。
 
@@ -60,3 +62,15 @@ DSH_DESKTOP_APP_ID=local.sebastian.deepseek-harness-win7-intranet
 5. 单独检查 Windows 工作区 ACL 继承及新建文件关闭后重读，不把社区尚未关闭的问题标为已修复。
 
 开发机单测、社区已有发布或 Linux 上的构建成功均不能替代以上验收。完成前不得把包称作已验证的 Win7 内网正式版。
+
+## 打包后的 Host 冒烟检查
+
+在 Windows 构建机的仓库根目录，用刚整理的 Electron 运行本项目脚本：
+
+```powershell
+$env:ELECTRON_RUN_AS_NODE = '1'
+& '.\out\prepared\application\DeepSeek Harness.exe' --expose-internals scripts/smoke-prepared-intranet.mjs out/prepared/application
+Remove-Item Env:ELECTRON_RUN_AS_NODE
+```
+
+脚本使用临时 Harness home 和 profile，检查冷启动、已认证的本机前端、内网模型表单 bundle、引导配置和正常退出。测试观察 Host 的 Node socket 调用；任何非 loopback 连接尝试都会记为失败。通过意味着观察范围内没有发起外网连接，并不等于完成了整台机器的抓包或 Win7 验收。此脚本不会读真实办公配置或连接单位接口。

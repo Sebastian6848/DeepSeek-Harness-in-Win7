@@ -5,6 +5,8 @@
 import("//electron/build/args/all.gn")
 is_debug = false
 is_official_build = false
+# Non-official Chromium otherwise ships a sample credits page.
+generate_about_credits = true
 is_component_build = false
 dcheck_always_on = false
 

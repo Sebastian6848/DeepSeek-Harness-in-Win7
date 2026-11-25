@@ -20,7 +20,7 @@
 
 ## 使用流程
 
-后续的本项目安装包需要在 Windows 构建机上生成并验收，**不能把未修改的社区安装包当成本项目内网版**。
+本项目安装包发布在 [GitHub Releases](https://github.com/Sebastian6848/DeepSeek-Harness-in-Win7/releases)。当前为未签名的内网适配预览版，Win7 真机及单位服务验收状态见 [验证记录](docs/validation.md)。安装包复用固定社区二进制，并包含本项目编译的修改。
 
 1. 先按社区适配的系统要求离线准备 Win7 SP1 x64、KB2533623（或替代更新）、KB4474419 和对应 VC++/UCRT 组件。版本和来源保留在 [社区原说明](docs/community/factfinding-readme.md)，不要在办公电脑上运行在线安装器。
 2. 安装本项目构建并校验过的包，打开设置中的模型页。
@@ -28,6 +28,8 @@
 4. 保存自定义提供商，选择该模型和本机工作目录后开始工作。模型服务须支持工具调用，才能执行文件/终端任务。
 
 不需要单位接口或真实 API Key 才能运行自动测试；测试使用本机模拟服务。
+
+实际桌面模型配置界面见 [界面截图](docs/assets/intranet-model-form.png)。
 
 ## 目录
 
@@ -51,7 +53,7 @@ cd DeepSeek-Harness-in-Win7
 npm test
 cd deepseek-harness
 pnpm install --frozen-lockfile
-pnpm exec vitest run packages/boot/app-boot/tests/intranet.spec.ts packages/boot/app-boot/tests/profile.spec.ts packages/llm/llm-pi-ai/tests/adapter.spec.ts apps/desktop/tests/update-coordinator.spec.ts apps/desktop/tests/welcome-window.spec.ts apps/desktop/tests/welcome-startup.spec.ts apps/desktop/tests/win7-update-feed.spec.ts packages/client/ui-settings-models/tests/provider-form.client.spec.tsx
+pnpm exec vitest run packages/boot/app-boot/tests/intranet.spec.ts packages/boot/app-boot/tests/profile.spec.ts packages/llm/llm-pi-ai/tests/adapter.spec.ts apps/desktop/tests/update-coordinator.spec.ts apps/desktop/tests/welcome-window.spec.ts apps/desktop/tests/welcome-startup.spec.ts apps/desktop/tests/welcome-host.spec.ts apps/desktop/tests/win7-update-feed.spec.ts apps/desktop/tests/desktop-package-environment.spec.ts packages/client/ui-settings-models/tests/provider-form.client.spec.tsx
 pnpm run build
 ```
 

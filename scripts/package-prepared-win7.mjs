@@ -17,11 +17,16 @@ process.env.NODE_PATH = join(resolve(values.tools), 'node_modules'); Module._ini
 process.env.CSC_IDENTITY_AUTO_DISCOVERY = 'false'
 process.env.DSH_ALLOW_EXTERNAL_NETWORK = '0'
 process.env.ELECTRON_BUILDER_7Z_FILTER = 'BCJ'
+// Match the community Windows packaging default; downloads happen only on this build host.
+process.env.ELECTRON_BUILDER_COMPRESSION_LEVEL ??= '3'
 const require = createRequire(join(resolve(values.tools), 'package.json'))
+const builderRequire = createRequire(require.resolve('electron-builder/package.json'))
+if (builderRequire('app-builder-lib/package.json').version !== '26.17.0') throw new Error('Packaging requires the pinned app-builder-lib 26.17.0')
+for (const name of Object.keys(process.env)) if (/^(?:WIN_)?CSC_/iu.test(name)) delete process.env[name]
 const { build, Platform, Arch } = require('electron-builder')
 const { installWindowsDirectoryInstaller } = await import('../deepseek-harness/apps/desktop/scripts/windows-directory-installer.mjs')
 const { readInstallerLocales, renderInstallerStrings } = await import('../deepseek-harness/apps/desktop/scripts/installer-locales.mjs')
-installWindowsDirectoryInstaller()
+installWindowsDirectoryInstaller(builderRequire)
 const output = resolve(values.output), ui = join(desktop, '.desktop-build/targets/win-x64/installer-ui')
 mkdirSync(output, { recursive: true })
 execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File',
@@ -34,10 +39,13 @@ await build({ prepackaged: resolve(values.prepared), projectDir: desktop, target
   extraMetadata: { version: metadata.version },
   artifactName: `deepseek-harness-${metadata.version}-win7-x64-intranet-unsigned.exe`,
   directories: { output }, publish: null,
-  win: { icon: join(desktop, 'resources/icon-windows.png'), forceCodeSigning: false, target: ['nsis'] },
+  win: { icon: join(desktop, 'resources/icon-windows.png'), forceCodeSigning: false, signExecutable: false, target: ['nsis'] },
   nsis: { uninstallDisplayName: '${productName}',
     installerSidebar: join(ui, 'uninstaller-sidebar.bmp'), uninstallerSidebar: join(ui, 'uninstaller-sidebar.bmp'),
     include: join(desktop, 'scripts/installer.nsh'), oneClick: false, perMachine: false, allowElevation: false,
-    allowToChangeInstallationDirectory: false, installerLanguages: readInstallerLocales().map(x => x.id), differentialPackage: false },
+    // The prepared tree already contains the pinned helper. Never replace it with a downloaded executable.
+    packElevateHelper: false,
+    allowToChangeInstallationDirectory: false, installerLanguages: readInstallerLocales().map(x => x.id), differentialPackage: true },
 } })
+writeFileSync(join(output, 'packaging-complete.json'), JSON.stringify({ version: metadata.version, sourceCommit: metadata.dshBuildCommit, externalNetworkDefault: false }) + '\n')
 console.log(`Offline installer artifacts: ${output}`)

@@ -4,7 +4,12 @@
   "packaging": {
     "repository": "https://github.com/factfinding/dsh-win7.git",
     "commit": "5f77cac5a41d15de88af00a2de02be049abf5505",
-    "imported_paths": ["scripts", "shim", "win7-fixes", "LICENSE"]
+    "imported_paths": [
+      "scripts",
+      "shim",
+      "win7-fixes",
+      "LICENSE"
+    ]
   },
   "binary_seed": {
     "repository": "factfinding/dsh-win7",
@@ -28,5 +33,15 @@
     "repository": "https://github.com/czh869452912/deepseek-harness-win7.git",
     "commit": "1be3b7891ce67c1d42b2bee41412a27e11722389",
     "usage": "reference only; its Python port was not imported"
+  },
+  "chromium_notices": {
+    "repository": "electron/electron",
+    "tag": "v44.2.0",
+    "archive": "electron-v44.2.0-win32-x64.zip",
+    "archive_sha256": "4021363e3090d67a144ebedb90765cf193b0e61f300c519c83f0174502a481da",
+    "file": "LICENSES.chromium.html",
+    "bytes": 20472830,
+    "sha256": "7b328b8c7463ac9bfc7dc648c751533517c8441a0b5b21047d6c0b2620e60d70",
+    "purpose": "Replace the sample credits page in the community binary with official same-version Electron/Chromium third-party notices; no official executable is used."
   }
 }
