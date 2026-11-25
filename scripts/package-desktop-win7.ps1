@@ -1,0 +1,41 @@
+# Packages the DeepSeek Harness desktop app for Windows 7 x64 (unsigned) from deepseek-harness\.
+# Inputs, all built in this directory (see docs/porting.md):
+#   out\node-v24.21.0-win-x64.zip            Win7 node.exe for the primary runtime (scripts\build-node.cmd)
+#   out\win7-python-wheels\                  cryptography, onnxruntime and pymupdf wheels with shim DLLs for the primary runtime's
+#                                            Python (scripts\build-win7-python-wheels.ps1)
+#   out\win7-runtime-overlay\                rg, libvips, LibreOffice Kit, winpty + version pins (scripts\build-win7-overlay.ps1)
+#   out\pwsh\PowerShell-7.2.24-win-x64.zip   PowerShell 7.2 for the Host PATH on Win7, with its .sha256
+#   out\electron-v44.2.0-win32-x64.zip       Win7-patched Electron (scripts\electron-build.cmd)
+# Needs deepseek-harness\apps\desktop\.env.windows. Extra arguments go to the package script, e.g. --check, or
+# --build-version 0.2.1-rc.5.20261031.1 for a test build that outranks the release it extends.
+# This intranet build clears the update feed and produces an offline installer without channel metadata.
+# Output: deepseek-harness\apps\desktop\.desktop-build\targets\win-x64\unsigned-artifacts\
+$ErrorActionPreference = 'Stop'
+$root = Split-Path $PSScriptRoot
+$out = Join-Path $root 'out'
+$inputs = @{
+  DSH_PRIMARY_RUNTIME_NODE_ARCHIVE = Join-Path $out 'node-v24.21.0-win-x64.zip'
+  DSH_WIN7_PYTHON_WHEELS = Join-Path $out 'win7-python-wheels'
+  DSH_WIN7_RUNTIME_OVERLAY = Join-Path $out 'win7-runtime-overlay'
+  DSH_WIN7_PWSH_ARCHIVE = Join-Path $out 'pwsh\PowerShell-7.2.24-win-x64.zip'
+  DSH_WIN7_ELECTRON_ARCHIVE = Join-Path $out 'electron-v44.2.0-win32-x64.zip'
+}
+foreach ($name in $inputs.Keys) {
+  if (-not (Test-Path -LiteralPath $inputs[$name])) { throw "$name input is missing: $($inputs[$name])" }
+  Set-Item "env:$name" $inputs[$name]
+}
+$env:DSH_WIN7_PWSH_SHA256 = (Get-Content -Raw "$($inputs.DSH_WIN7_PWSH_ARCHIVE).sha256").Trim()
+# This distribution is installed and updated by copying offline packages.
+$env:DSH_ALLOW_EXTERNAL_NETWORK = '0'
+$env:DSH_TELEMETRY_DISABLED = '1'
+Remove-Item Env:DSH_WIN7_UPDATE_URL -ErrorAction SilentlyContinue
+$env:PATH = (Join-Path $root 'tools\node-v24.21.0-win-x64') + ';' + $env:PATH
+$env:COREPACK_ENABLE_DOWNLOAD_PROMPT = '0'
+$env:ELECTRON_SKIP_BINARY_DOWNLOAD = '1'
+Push-Location (Join-Path $root 'deepseek-harness')
+try {
+  corepack pnpm run package:desktop:win:x64:unsigned @args
+  if ($LASTEXITCODE -ne 0) { throw "packaging failed with exit code $LASTEXITCODE" }
+} finally {
+  Pop-Location
+}

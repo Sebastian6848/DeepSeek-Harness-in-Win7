@@ -1,0 +1,11 @@
+{
+  "name": "deepseek-harness-in-win7",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "repository": "https://github.com/Sebastian6848/DeepSeek-Harness-in-Win7.git",
+  "scripts": {
+    "test": "node --experimental-strip-types --test tests/*.test.mjs"
+  },
+  "engines": { "node": ">=24.9.0" }
+}

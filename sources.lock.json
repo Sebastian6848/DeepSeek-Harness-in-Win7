@@ -6,6 +6,14 @@
     "commit": "5f77cac5a41d15de88af00a2de02be049abf5505",
     "imported_paths": ["scripts", "shim", "win7-fixes", "LICENSE"]
   },
+  "binary_seed": {
+    "repository": "factfinding/dsh-win7",
+    "tag": "dsh-v0.2.2-rc.5-win7.2",
+    "asset": "deepseek-harness-0.2.2-rc.5.2-win7-x64-unsigned.exe",
+    "bytes": 497869806,
+    "sha256": "b5a1c10ad57ca776d72c0da0d7a9d927c9a50e402348119c749e0fb327801811",
+    "purpose": "Reuse pinned Win7 binaries and production dependencies; replace application code from this source build, reseal and repackage."
+  },
   "harness": {
     "repository": "https://github.com/factfinding/deepseek-harness.git",
     "branch": "dsh-v0.2.2-rc.5-win7",

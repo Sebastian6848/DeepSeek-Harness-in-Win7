@@ -8,6 +8,22 @@ Windows 构建机需要 Visual Studio C++ 工具链、PowerShell 7、7-Zip 和�
 
 ## 精确的兼容运行时输入
 
+### 优先路径：复用固定社区安装包内的二进制
+
+`sources.lock.json` 的 `binary_seed` 固定社区安装包、大小及 SHA256。该包只在构建机下载和提取，不在目标机执行联网安装步骤。先在 `deepseek-harness/` 完成依赖安装和 `pnpm run build`，再在仓库根目录运行：
+
+```powershell
+node scripts/prepare-community-package.mjs --installer out/community/upstream-win7.exe --sevenzip <7z.exe的路径> --output out/prepared --version 0.2.2-rc.5.3
+npm install --prefix out/package-tools --ignore-scripts --no-audit --no-fund --save-exact electron-builder@26.17.0 @electron/asar@3.4.1
+node scripts/package-prepared-win7.mjs --prepared out/prepared/application --output out/installers --tools out/package-tools
+```
+
+准备脚本仅接受哈希完全匹配的来源和空输出目录；提取原包，验证原有运行时清单，覆盖本仓库编译的 boot、LLM、自定义模型界面和桌面 bundle，重建清单，再生成 ASAR。它保留原包的所有原生二进制和 unpack 位置，逐项校验覆盖文件，并删除 `app-update.yml`。包内 `INTRANET-BUILD.json` 记录来源、源码提交及是否有未提交修改。正式发布预览包前，先提交源码，再从干净工作区执行准备步骤。
+
+Windows 打包步骤复用社区 NSIS 模板、目录提升/卸载逻辑及原生安装界面，使用 Visual Studio 编译安装辅助 DLL。安装包不带自动更新源，也不依赖目标机下载组件。此流程不会重新编译 Electron/Node；其平台支持仍来自固定的社区补丁。编译依赖和安装包都放在被 Git 忽略的 `out/` 下。
+
+### 从零重建社区二进制
+
 根目录 `scripts/package-desktop-win7.ps1` 复用社区的打包入口，要求已有以下输入：
 
 - `out/node-v24.21.0-win-x64.zip`：社区 Win7 版 Node，目录结构及 SHA256 与源码 `scripts/primary-runtime/lock.json` 一致。
@@ -16,7 +32,7 @@ Windows 构建机需要 Visual Studio C++ 工具链、PowerShell 7、7-Zip 和�
 - `out/win7-python-wheels/`：与锁文件一致的 Win7 Python wheels。
 - `out/pwsh/PowerShell-7.2.24-win-x64.zip` 及 `.sha256`。
 
-这些输入的源码、补丁和构建方法已由社区提供，本项目尚未在当前开发环境重新编译或完整核验其 Windows 二进制。缺少任何输入时打包脚本会明确失败，不能通过改哈希、下载官方不兼容运行时或忽略检查来绕过。不要把这些体积很大的编译产物提交进 Git。
+这些输入的源码、补丁和构建方法已由社区提供，本项目当前采用上面的固定二进制复用路径。缺少任何输入时本节的原始打包脚本会明确失败，不能通过改哈希、下载官方不兼容运行时或忽略检查来绕过。不要把这些体积很大的编译产物提交进 Git。
 
 在 `deepseek-harness/apps/desktop/.env.windows` 中配置本项目 App ID，例如：
 
