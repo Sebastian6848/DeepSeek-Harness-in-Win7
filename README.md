@@ -29,6 +29,8 @@
 
 不需要单位接口或真实 API Key 才能运行自动测试；测试使用本机模拟服务。
 
+从 `0.2.2-rc.5.4` 起，Windows 桌面启动的工具可以直接运行包内的 `python`、`node` 和 `pnpm`。pnpm 默认离线，npm 与 Git 由本机另外提供。Python 的标准流默认使用 UTF-8，已有显式编码设置优先。PowerShell 长输出若出现 `Formatted preview stored at`，可按同一提示的 `Full stdout` 或 `Full stderr` 路径读取或搜索原始完整输出。
+
 实际桌面模型配置界面见 [界面截图](docs/assets/intranet-model-form.png)。
 
 ## 目录

@@ -21,7 +21,7 @@ import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime from '@deepseek-ai/dsh-tools'
+import ToolRuntime, { defineTool } from '@deepseek-ai/dsh-tools'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
 import type { PostToolDecision, ToolExecution, ToolExecutionToken } from '@deepseek-ai/dsh-tools'
@@ -162,6 +162,35 @@ describe('config validation', () => {
 })
 
 describe('oversized plain-text replacement', () => {
+  it('identifies the PowerShell tail as a preview and retains both raw stream links outside the cropped body', async () => {
+    const { ctx, spill } = await setup({ maxInlineTokens: 300 })
+    try {
+      const stdout = 'line 2148 output\n'.repeat(1000)
+      const stream = { type: 'object', required: true, additionalProperties: false, properties: {
+        text: { type: 'string', required: true }, truncated: { type: 'boolean', required: true }, spillPath: { type: 'string' },
+      } } as const
+      ctx.tools.register(defineTool({
+        name: 'pwsh', description: 'PowerShell fixture', parameters: {},
+        output: {
+          schema: { type: 'object', additionalProperties: false, properties: { kind: { type: 'string', required: true }, stdout: stream, stderr: stream } },
+          render: (_args, value) => [{ type: 'text', text: value.stdout.text }],
+        },
+        async execute() {
+          return { kind: 'foreground', stdout: { text: stdout, truncated: true, spillPath: '/tmp/full-stdout.log' },
+            stderr: { text: 'last error', truncated: true, spillPath: '/tmp/full-stderr.log' } }
+        },
+      }))
+      const result = await executeToolFixture(ctx, exec('pwsh'))
+      const text = textOf(result.content)
+      expect(spill?.saves[0]?.content).toBe(stdout)
+      expect(text).toContain('Formatted preview stored at: /spill/pwsh.txt')
+      expect(text).toContain('Full stdout: /tmp/full-stdout.log')
+      expect(text).toContain('Full stderr: /tmp/full-stderr.log')
+      expect(text).not.toContain('Full formatted result')
+      expect(estimateContent(result.content)).toBeLessThanOrEqual(300)
+    } finally { await ctx.fiber.dispose() }
+  })
+
   it('spills the full text and replaces the result with a preview + locator within the cap', async () => {
     const { ctx, spill } = await setup({ maxInlineTokens: 64 })
     const body = 'HEAD'.repeat(200) + 'TAIL'.repeat(200) // 1600 bytes > 200

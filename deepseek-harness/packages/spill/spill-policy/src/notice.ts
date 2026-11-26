@@ -5,6 +5,7 @@ import type { SpillRef } from '@deepseek-ai/dsh-spill'
 const OPEN = '('
 const CLOSE = ')'
 const LOCATION = ' Full formatted result stored at: '
+const PREVIEW_LOCATION = ' Formatted preview stored at: '
 const GUIDANCE_SEPARATOR = '. '
 const SEPARATOR = '\n\n'
 const EXACT_OMISSION = describeOmitted({ kind: 'exact', count: 0 }, 'bytes')
@@ -16,11 +17,15 @@ const COUNT_SUFFIX = EXACT_OMISSION.slice(COUNT_OFFSET + 1)
  * @param omitted - bytes omitted by the retention policy.
  * @param ref - saved text locator and retrieval guidance.
  * @param images - number of whole images omitted alongside text.
+ * @param earlierTruncation - separate recovery locations when shell capture already dropped bytes.
  * @returns the complete notice without a leading preview separator.
  */
-export function formatSpillNotice(omitted: Omitted, ref: Pick<SpillRef, 'locator' | 'retrievalHint'>, images = 0): string {
+export function formatSpillNotice(omitted: Omitted, ref: Pick<SpillRef, 'locator' | 'retrievalHint'>, images = 0,
+  earlierTruncation?: string): string {
   const imageNotice = images > 0 ? ` Omitted ${images} images.` : ''
-  return `${OPEN}${describeOmitted(omitted, 'bytes')}${imageNotice}${LOCATION}${ref.locator}${GUIDANCE_SEPARATOR}${ref.retrievalHint}${CLOSE}`
+  const location = earlierTruncation === undefined ? LOCATION : PREVIEW_LOCATION
+  const streams = earlierTruncation === undefined ? '' : ` Shell capture was already truncated. ${earlierTruncation}`
+  return `${OPEN}${describeOmitted(omitted, 'bytes')}${imageNotice}${location}${ref.locator}${GUIDANCE_SEPARATOR}${ref.retrievalHint}${streams}${CLOSE}`
 }
 
 function isOmission(text: string): boolean {
@@ -48,10 +53,13 @@ export function hasSpillNotice(text: string): boolean {
   while (true) {
     const next = text.indexOf(`${SEPARATOR}${OPEN}`, start)
     const candidate = text.slice(start, next < 0 ? -CLOSE.length : next)
-    const location = candidate.indexOf(LOCATION, OPEN.length)
-    if (candidate.startsWith(OPEN) && location >= 0
-      && isOmission(candidate.slice(OPEN.length, location))) {
-      return text.indexOf(GUIDANCE_SEPARATOR, start + location + LOCATION.length) >= 0
+    if (candidate.startsWith(OPEN)) {
+      for (const label of [LOCATION, PREVIEW_LOCATION]) {
+        const location = candidate.indexOf(label, OPEN.length)
+        if (location >= 0 && isOmission(candidate.slice(OPEN.length, location))) {
+          return text.indexOf(GUIDANCE_SEPARATOR, start + location + label.length) >= 0
+        }
+      }
     }
     if (next < 0) return false
     start = next + SEPARATOR.length

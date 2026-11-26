@@ -9,7 +9,7 @@ import { parseArgs } from 'node:util'
 
 const root = fileURLToPath(new URL('../', import.meta.url))
 export const APP_ID = 'local.sebastian.deepseek-harness-win7-intranet'
-export const DEFAULT_VERSION = '0.2.2-rc.5.3'
+export const DEFAULT_VERSION = '0.2.2-rc.5.4'
 const hash = path => createHash('sha256').update(readFileSync(path)).digest('hex')
 export const canonicalArchivePath = path => path.replaceAll('\\', '/').replace(/^\/+/, '')
 const nativeArchivePath = path => join(...canonicalArchivePath(path).split('/'))
@@ -103,6 +103,9 @@ async function main() {
     ['packages/boot/app-boot', ['index.js', 'worker/profile-resolution-bootstrap.js']],
     ['packages/llm/llm-pi-ai', ['index.js']],
     ['packages/client/ui-settings-models', ['index.js', 'client.js']],
+    ['packages/spill/spill-policy', ['index.js', 'types/notice.js']],
+    // The terminal card uses the browser-safe spill-notice parser in its compiled browser bundle.
+    ['packages/client/ui-tool', ['client.js']],
   ]
   const replaced = []
   for (const [location, names] of overlays) {
@@ -150,6 +153,7 @@ async function main() {
   assertNativeUnchanged(outerNatives, app)
   rmSync(join(resources, 'app-update.yml'), { force: true })
   cpSync(resolve(values['chromium-notices']), join(app, 'LICENSES.chromium.html'))
+  cpSync(join(root, 'deepseek-harness/apps/desktop/resources/win7-shell'), join(resources, 'runtime/win7-shell'), { recursive: true })
   const provenance = { schemaVersion: 1, version: values.version, sourceRepository: lock.project_repository,
     sourceCommit: commit, sourceDirty: dirty, binarySeed: lock.binary_seed, chromiumNotices: lock.chromium_notices, replaced, runtimeFiles: sealed.files.length,
     reusedNativeFiles: natives.length, externalNetworkDefault: false, win7MachineValidated: false }

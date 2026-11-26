@@ -20,6 +20,11 @@ describe('persisted spill notice', () => {
     }
   })
 
+  it('recognizes the truncated shell preview footer for terminal rendering', () => {
+    const notice = formatSpillNotice({ kind: 'exact', count: 42 }, ref, 0, 'Full stdout: C:\\用户\\out.log')
+    expect(hasSpillNotice(`tail\n\n${notice}`)).toBe(true)
+  })
+
   it('reports whole-image omissions while recognizing historical text-only notices', () => {
     const notice = formatSpillNotice({ kind: 'exact', count: 12 }, ref, 2)
     expect(notice).toContain('Omitted 12 bytes. Omitted 2 images.')

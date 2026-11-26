@@ -13,7 +13,7 @@ Windows 构建机需要 Visual Studio C++ 工具链、PowerShell 7、7-Zip 和�
 `sources.lock.json` 的 `binary_seed` 固定社区安装包、大小及 SHA256。该包只在构建机下载和提取，不在目标机执行联网安装步骤。先在 `deepseek-harness/` 完成依赖安装和 `pnpm run build`，再在仓库根目录运行：
 
 ```powershell
-node scripts/prepare-community-package.mjs --installer out/community/upstream-win7.exe --sevenzip <7z.exe的路径> --chromium-notices out/notices/LICENSES.chromium.html --output out/prepared --version 0.2.2-rc.5.3
+node scripts/prepare-community-package.mjs --installer out/community/upstream-win7.exe --sevenzip <7z.exe的路径> --chromium-notices out/notices/LICENSES.chromium.html --output out/prepared --version 0.2.2-rc.5.4
 npm install --prefix out/package-tools --ignore-scripts --no-audit --no-fund --save-exact electron-builder@26.17.0 @electron/asar@3.4.1
 node scripts/package-prepared-win7.mjs --prepared out/prepared/application --output out/installers --tools out/package-tools
 ```

@@ -1,4 +1,4 @@
-/** Windows 7 Host environment: the bundled PowerShell 7.2 comes first on PATH. */
+/** Expose the packaged Windows interpreters to the Host and its child processes. */
 
 import { existsSync } from 'node:fs'
 import { release } from 'node:os'
@@ -15,14 +15,12 @@ export function isPreWindows8(osRelease: string): boolean {
 }
 
 /**
- * Prepend the Win7 build's bundled `resources/runtime/pwsh` to the Host PATH on Windows 7. Windows
- * PowerShell 2.0 cannot start under the ACL sandbox's restricted token and lacks the PowerShell 5
- * syntax the pwsh executor's encoding preamble uses; pwsh-local prefers a PATH `pwsh.exe` over it.
+ * Expose the trusted, read-only packaged Python and Node, and prefer bundled PowerShell on Windows 7.
  * @param environment - Host environment before the change.
  * @param resourcesPath - Packaged application's resources directory.
  * @param platform - Current platform.
  * @param osRelease - Current kernel version.
- * @returns The environment, with PATH changed only on Windows 7 when the bundled pwsh exists.
+ * @returns A Host-only environment. Explicit Python encoding settings remain authoritative.
  */
 export function win7HostEnvironment(
   environment: NodeJS.ProcessEnv,
@@ -30,11 +28,30 @@ export function win7HostEnvironment(
   platform: NodeJS.Platform = process.platform,
   osRelease: string = release(),
 ): NodeJS.ProcessEnv {
-  if (platform !== 'win32' || !isPreWindows8(osRelease)) return environment
+  if (platform !== 'win32') return environment
   const pwsh = join(resourcesPath, 'runtime', 'pwsh')
-  if (!existsSync(join(pwsh, 'pwsh.exe'))) return environment
+  const dependencies = join(resourcesPath, 'runtime', 'primary-runtime', 'dependencies')
+  const node = join(dependencies, 'node', 'bin')
+  const python = join(dependencies, 'python')
+  const launchers = join(resourcesPath, 'runtime', 'win7-shell')
+  const hasNode = existsSync(join(node, 'node.exe'))
+  const hasPython = existsSync(join(python, 'python.exe'))
+  const paths = [
+    ...(isPreWindows8(osRelease) && existsSync(join(pwsh, 'pwsh.exe')) ? [pwsh] : []),
+    ...(hasNode ? [node] : []),
+    ...(hasPython ? [python] : []),
+    ...(hasNode && existsSync(join(dependencies, 'pnpm', 'bin', 'pnpm.mjs')) && existsSync(join(launchers, 'pnpm.cmd')) ? [launchers] : []),
+  ]
+  if (paths.length === 0) return environment
   // A spread Windows environment keeps the original key case (usually "Path"); reuse it.
-  const key = Object.keys(environment).find(name => name.toUpperCase() === 'PATH') ?? 'Path'
-  const current = environment[key]
-  return { ...environment, [key]: current === undefined || current === '' ? pwsh : `${pwsh};${current}` }
+  const keys = Object.keys(environment)
+  const key = keys.find(name => name.toUpperCase() === 'PATH') ?? 'Path'
+  const path = [ ...paths, environment[key] ].filter(Boolean).join(';')
+  const result = { ...environment, [key]: path }
+  if (hasPython) {
+    const configured = (name: string) => keys.some(key => key.toUpperCase() === name && environment[key] !== undefined)
+    if (!configured('PYTHONUTF8')) result.PYTHONUTF8 = '1'
+    if (!configured('PYTHONIOENCODING')) result.PYTHONIOENCODING = 'utf-8'
+  }
+  return result
 }

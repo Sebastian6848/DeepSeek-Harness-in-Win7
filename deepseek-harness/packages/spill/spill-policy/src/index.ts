@@ -41,6 +41,20 @@ function retainable(content: readonly ContentBlock[]): content is RetainableBloc
 
 const GAP = { type: 'text', text: '\n\n[...]\n\n' } as const
 
+/** Use the shell's canonical result so command text cannot manufacture recovery locators. */
+function shellCaptureNotice(toolName: string, value: unknown): string | undefined {
+  if (toolName !== 'pwsh' && toolName !== 'bash') return undefined
+  if (value === null || typeof value !== 'object' || !('kind' in value) || value.kind !== 'foreground') return undefined
+  const streams = value as { stdout?: unknown; stderr?: unknown }
+  const notices = (['stdout', 'stderr'] as const).flatMap(name => {
+    const stream = streams[name]
+    if (stream === null || typeof stream !== 'object' || !('truncated' in stream) || stream.truncated !== true) return []
+    const path = 'spillPath' in stream && typeof stream.spillPath === 'string' ? stream.spillPath : '(unavailable)'
+    return [`Full ${name}: ${path}`]
+  })
+  return notices.length > 0 ? notices.join(' | ') : undefined
+}
+
 /**
  * Mount token retention for accepted tool results and PTC log copies.
  * @param ctx - tool registry and optional pricing, filesystem, attachment, and spill services.
@@ -91,6 +105,7 @@ export function apply(ctx: Context, config: Config): void {
   /** Recoverably bound one display copy; failures leave successful tool content visible. */
   async function bound(
     exec: ToolExecution, content: ContentBlock[], toolName: string, callId: ToolCallId, label: 'result' | 'dispatch',
+    earlierTruncation?: string,
   ): Promise<ContentBlock[] | undefined> {
     if (!retainable(content)) return undefined
     try {
@@ -107,7 +122,7 @@ export function apply(ctx: Context, config: Config): void {
       })
       const totalBytes = content.reduce((total, block) => total + (block.type === 'text' ? Buffer.byteLength(block.text, 'utf8') : 0), 0)
       const notice = (bytes: number, count: number): Extract<RetainableBlock, { type: 'text' }> => ({
-        type: 'text', text: formatSpillNotice({ kind: 'exact', count: bytes }, ref, count),
+        type: 'text', text: formatSpillNotice({ kind: 'exact', count: bytes }, ref, count, earlierTruncation),
       })
       const worstNotice = notice(totalBytes, images.length)
       const reserved = price(GAP) + price({ type: 'text', text: `\n\n${worstNotice.text}` })
@@ -138,7 +153,8 @@ export function apply(ctx: Context, config: Config): void {
     const hasImages = content.some(block => block.type === 'image')
     // Text-only PTC bindings retain their asynchronous log-only spill path.
     if (exec.parent !== undefined && !hasImages) return decision
-    const retained = await bound(exec, content, exec.name, exec.callId, exec.parent === undefined ? 'result' : 'dispatch')
+    const retained = await bound(exec, content, exec.name, exec.callId, exec.parent === undefined ? 'result' : 'dispatch',
+      shellCaptureNotice(exec.name, result.value))
     if (retained === undefined) return decision
     const additionalContexts = [...decision.additionalContexts ?? []]
     if (exec.parent !== undefined && !result.isError && hasImages && !retained.some(block => block.type === 'image')) {
