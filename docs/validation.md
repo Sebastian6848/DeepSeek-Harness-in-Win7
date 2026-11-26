@@ -26,6 +26,14 @@
 - 本机 CIM/WMI 查询失败，PowerShell 的 HTTP 客户端访问 GUI 回环地址异常，而直接 HTTP 请求能收到预期的 401。现有证据不足以定位为 Harness 的实现故障。可用 `node -p "require('node:os').totalmem()"` 读取总内存，不依赖 WMI。
 - Win7 上的 Node 和 Python 来自固定的社区兼容构建。升级运行时需要重新检查 Win7 兼容性。
 
+## `0.2.2-rc.5.4` 开发机验证
+
+`0.2.2-rc.5.4` 的开发机验证已通过：181 项相关回归、12 项根目录测试、完整源码构建的 10 个阶段。Windows 11 使用包内 PowerShell 和真实 `workspace-write` 沙箱运行了 3,000 行输出及 Python 中文打印，确认原始输出从第一行到最后一行均可找回，且 `python`、`node`、`pnpm` 均来自包内。打包 Host 的冷启动、本机前端和正常退出冒烟同样通过。
+
+同一开发机上，包内 PowerShell 在 `workspace-write` 下执行 `Get-CimInstance` 得到“拒绝访问”，在普通用户终端可查询系统版本。这个对照说明沙箱限制可以造成类似症状，Win7 上的具体原因仍待确认。同一沙箱内对临时回环 HTTP 服务使用 `Invoke-WebRequest -NoProxy -SkipHttpErrorCheck -TimeoutSec 4`，收到预期 401。Win7 上可用相同参数访问实际 GUI 回环地址并比较结果。
+
+最终 NSIS 安装包解包后的 8,896 个文件与干净准备目录逐项一致，ASAR 清单的 20,620 个运行时文件全部通过哈希校验。Windows 检查产品版本为 `0.2.2-rc.5.4`、签名状态为 `NotSigned`。安装包为 500,034,063 字节，SHA256 为 `4d18d42490672608560c432829dc57a24aca2cd65f4cc7227003d33b37cae7c2`。
+
 ## 仍需完成
 
 - `0.2.2-rc.5.4` Win7 真机复测、单位接口及整机外网流量验收。
